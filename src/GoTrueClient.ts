@@ -584,6 +584,47 @@ export default class GoTrueClient {
   }
 
   /**
+   * Log in a user given a User supplied OTP received via mobile.
+   */
+  async verifyOtpNoLogin(params: VerifyOtpParams): Promise<AuthResponse> {
+    try {
+      const { data, error } = await _request(this.fetch, 'POST', `${this.url}/verify`, {
+        headers: this.headers,
+        body: {
+          ...params,
+          gotrue_meta_security: { captcha_token: params.options?.captchaToken },
+        },
+        redirectTo: params.options?.redirectTo,
+        xform: _sessionResponse,
+      })
+
+      if (error) {
+        throw error
+      }
+
+      if (!data) {
+        throw new Error('An error occurred on token verification.')
+      }
+
+      const session: Session | null = data.session
+      const user: User = data.user
+
+      if (session?.access_token) {
+        await this._saveSession(session as Session)
+        this._notifyAllSubscribers('USER_UPDATED', session)
+      }
+
+      return { data: { user, session }, error: null }
+    } catch (error) {
+      if (isAuthError(error)) {
+        return { data: { user: null, session: null }, error }
+      }
+
+      throw error
+    }
+  }
+  
+  /**
    * Attempts a single-sign on using an enterprise Identity Provider. A
    * successful SSO attempt will redirect the current page to the identity
    * provider authorization page. The redirect URL is implementation and SSO
